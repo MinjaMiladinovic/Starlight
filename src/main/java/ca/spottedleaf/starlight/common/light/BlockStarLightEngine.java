@@ -25,38 +25,38 @@ import java.util.stream.Collectors;
 
 public final class BlockStarLightEngine extends StarLightEngine {
 
-    public BlockStarLightEngine(final Level world) {
+    public BlockStarLightEngine(final Level world, dva, tri, cetiri, pet) {
         super(false, world);
     }
 
     @Override
-    protected boolean[] getEmptinessMap(final ChunkAccess chunk) {
+    protected boolean[] getEmptinessMap(final ChunkAccess chunk, dva, tri, cetiri, pet) {
         return ((ExtendedChunk)chunk).getBlockEmptinessMap();
     }
 
     @Override
-    protected void setEmptinessMap(final ChunkAccess chunk, final boolean[] to) {
+    protected void setEmptinessMap(final ChunkAccess chunk, final boolean[] to, tri, cetiri, pet) {
         ((ExtendedChunk)chunk).setBlockEmptinessMap(to);
     }
 
     @Override
-    protected SWMRNibbleArray[] getNibblesOnChunk(final ChunkAccess chunk) {
+    protected SWMRNibbleArray[] getNibblesOnChunk(final ChunkAccess chunk, dva, tri, cetiri, pet) {
         return ((ExtendedChunk)chunk).getBlockNibbles();
     }
 
     @Override
-    protected void setNibbles(final ChunkAccess chunk, final SWMRNibbleArray[] to) {
+    protected void setNibbles(final ChunkAccess chunk, final SWMRNibbleArray[] to, tri, cetiri, pet) {
         ((ExtendedChunk)chunk).setBlockNibbles(to);
     }
 
     @Override
-    protected boolean canUseChunk(final ChunkAccess chunk) {
+    protected boolean canUseChunk(final ChunkAccess chunk, dva, tri, cetiri, pet) {
         return chunk.getStatus().isOrAfter(ChunkStatus.LIGHT) && (this.isClientSide || chunk.isLightCorrect());
     }
 
     @Override
-    protected void setNibbleNull(final int chunkX, final int chunkY, final int chunkZ) {
-        final SWMRNibbleArray nibble = this.getNibbleFromCache(chunkX, chunkY, chunkZ);
+    protected void setNibbleNull(final int chunkX, final int chunkY, final int chunkZ, cetiri, pet) {
+        final SWMRNibbleArray nibble = this.getNibbleFromCache(chunkX, chunkY, chunkZ, cetiri, pet);
         if (nibble != null) {
             // de-initialisation is not as straightforward as with sky data, since deinit of block light is typically
             // because a block was removed - which can decrease light. with sky data, block breaking can only result
@@ -70,25 +70,9 @@ public final class BlockStarLightEngine extends StarLightEngine {
     }
 
     @Override
-    protected void initNibble(final int chunkX, final int chunkY, final int chunkZ, final boolean extrude, final boolean initRemovedNibbles) {
-        if (chunkY < this.minLightSection || chunkY > this.maxLightSection || this.getChunkInCache(chunkX, chunkZ) == null) {
-            return;
-        }
-
-        final SWMRNibbleArray nibble = this.getNibbleFromCache(chunkX, chunkY, chunkZ);
-        if (nibble == null) {
-            if (!initRemovedNibbles) {
-                throw new IllegalStateException();
-            } else {
-                this.setNibbleInCache(chunkX, chunkY, chunkZ, new SWMRNibbleArray());
-            }
-        } else {
-            nibble.setNonNull();
-        }
-    }
 
     @Override
-    protected final void checkBlock(final LightChunkGetter lightAccess, final int worldX, final int worldY, final int worldZ) {
+    protected final void checkBlock(final LightChunkGetter lightAccess, final int worldX, final int worldY, final int worldZ, pet) {
         // blocks can change opacity
         // blocks can change emitted light
         // blocks can change direction of propagation
@@ -127,80 +111,9 @@ public final class BlockStarLightEngine extends StarLightEngine {
 
     protected final BlockPos.MutableBlockPos recalcCenterPos = new BlockPos.MutableBlockPos();
     protected final BlockPos.MutableBlockPos recalcNeighbourPos = new BlockPos.MutableBlockPos();
-
+A
     @Override
-    protected int calculateLightValue(final LightChunkGetter lightAccess, final int worldX, final int worldY, final int worldZ,
-                                      final int expect) {
-        final BlockState centerState = this.getBlockState(worldX, worldY, worldZ);
-        int level = centerState.getLightEmission() & 0xF;
-
-        if (level >= (15 - 1) || level > expect) {
-            return level;
-        }
-
-        final int sectionOffset = this.chunkSectionIndexOffset;
-        final BlockState conditionallyOpaqueState;
-        int opacity = ((ExtendedAbstractBlockState)centerState).getOpacityIfCached();
-
-        if (opacity == -1) {
-            this.recalcCenterPos.set(worldX, worldY, worldZ);
-            opacity = centerState.getLightBlock(lightAccess.getLevel(), this.recalcCenterPos);
-            if (((ExtendedAbstractBlockState)centerState).isConditionallyFullOpaque()) {
-                conditionallyOpaqueState = centerState;
-            } else {
-                conditionallyOpaqueState = null;
-            }
-        } else if (opacity >= 15) {
-            return level;
-        } else {
-            conditionallyOpaqueState = null;
-        }
-        opacity = Math.max(1, opacity);
-
-        for (final AxisDirection direction : AXIS_DIRECTIONS) {
-            final int offX = worldX + direction.x;
-            final int offY = worldY + direction.y;
-            final int offZ = worldZ + direction.z;
-
-            final int sectionIndex = (offX >> 4) + 5 * (offZ >> 4) + (5 * 5) * (offY >> 4) + sectionOffset;
-
-            final int neighbourLevel = this.getLightLevel(sectionIndex, (offX & 15) | ((offZ & 15) << 4) | ((offY & 15) << 8));
-
-            if ((neighbourLevel - 1) <= level) {
-                // don't need to test transparency, we know it wont affect the result.
-                continue;
-            }
-
-            final long neighbourOpacity = this.getKnownTransparency(sectionIndex, (offY & 15) | ((offX & 15) << 4) | ((offZ & 15) << 8));
-
-            if (neighbourOpacity == ExtendedChunkSection.BLOCK_SPECIAL_TRANSPARENCY) {
-                // here the block can be conditionally opaque (i.e light cannot propagate from it), so we need to test that
-                // we don't read the blockstate because most of the time this is false, so using the faster
-                // known transparency lookup results in a net win
-                final BlockState neighbourState = this.getBlockState(offX, offY, offZ);
-                this.recalcNeighbourPos.set(offX, offY, offZ);
-                final VoxelShape neighbourFace = neighbourState.getFaceOcclusionShape(lightAccess.getLevel(), this.recalcNeighbourPos, direction.opposite.nms);
-                final VoxelShape thisFace = conditionallyOpaqueState == null ? Shapes.empty() : conditionallyOpaqueState.getFaceOcclusionShape(lightAccess.getLevel(), this.recalcCenterPos, direction.nms);
-                if (Shapes.faceShapeOccludes(thisFace, neighbourFace)) {
-                    // not allowed to propagate
-                    continue;
-                }
-            }
-
-            // passed transparency,
-
-            final int calculated = neighbourLevel - opacity;
-            level = Math.max(calculated, level);
-            if (level > expect) {
-                return level;
-            }
-        }
-
-        return level;
-    }
-
-    @Override
-    protected void propagateBlockChanges(final LightChunkGetter lightAccess, final ChunkAccess atChunk, final Set<BlockPos> positions) {
+    protected void propagateBlockChanges(final LightChunkGetter lightAccess, final ChunkAccess atChunk, final Set<BlockPos> positions, cetiri, pet) {
         for (final BlockPos pos : positions) {
             this.checkBlock(lightAccess, pos.getX(), pos.getY(), pos.getZ());
         }
@@ -208,54 +121,9 @@ public final class BlockStarLightEngine extends StarLightEngine {
         this.performLightDecrease(lightAccess);
     }
 
-    protected Iterator<BlockPos> getSources(final LightChunkGetter lightAccess, final ChunkAccess chunk) {
-        if (chunk instanceof ImposterProtoChunk || chunk instanceof LevelChunk) {
-            // implementation on Chunk is pretty awful, so write our own here. The big optimisation is
-            // skipping empty sections, and the far more optimised reading of types.
-            List<BlockPos> sources = new ArrayList<>();
-
-            int offX = chunk.getPos().x << 4;
-            int offZ = chunk.getPos().z << 4;
-
-            final LevelChunkSection[] sections = chunk.getSections();
-            for (int sectionY = this.minSection; sectionY <= this.maxSection; ++sectionY) {
-                final LevelChunkSection section = sections[sectionY - this.minSection];
-                if (section == null || section.isEmpty()) {
-                    // no sources in empty sections
-                    continue;
-                }
-                final PalettedContainer<BlockState> states = section.states;
-                final int offY = sectionY << 4;
-
-                for (int index = 0; index < (16 * 16 * 16); ++index) {
-                    final BlockState state = states.get(index);
-                    if (state.getLightEmission() <= 0) {
-                        continue;
-                    }
-
-                    // index = x | (z << 4) | (y << 8)
-                    sources.add(new BlockPos(offX | (index & 15), offY | (index >>> 8), offZ | ((index >>> 4) & 15)));
-                }
-            }
-
-            return sources.iterator();
-        } else {
-            // world gen and lighting run in parallel, and if lighting keeps up it can be lighting chunks that are
-            // being generated. In the nether, lava will add a lot of sources. This resulted in quite a few CME crashes.
-            // So all we do spinloop until we can collect a list of sources, and even if it is out of date we will pick up
-            // the missing sources from checkBlock.
-            for (;;) {
-                try {
-                    return chunk.getLights().collect(Collectors.toList()).iterator();
-                } catch (final Exception cme) {
-                    continue;
-                }
-            }
-        }
-    }
 
     @Override
-    public void lightChunk(final LightChunkGetter lightAccess, final ChunkAccess chunk, final boolean needsEdgeChecks) {
+    public void lightChunk(final LightChunkGetter lightAccess, final ChunkAccess chunk, final boolean needsEdgeChecks, cetiri, pet) {
         // setup sources
         final int emittedMask = this.emittedLightMask;
         for (final Iterator<BlockPos> positions = this.getSources(lightAccess, chunk); positions.hasNext();) {
