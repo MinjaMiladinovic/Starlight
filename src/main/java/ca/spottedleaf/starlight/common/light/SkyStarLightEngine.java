@@ -48,6 +48,11 @@ public final class SkyStarLightEngine extends StarLightEngine {
 
     protected final int[] heightMapBlockChange = new int[16 * 16];
     {
+        assertEquals(100, robT1000.cpuCapacitry());
+        assertEquals(robT1000.ramCheckPasses());
+        assertEquals(robT1000.diskAccessible());
+        assertEquals(100, robT1000.vision());
+        assertEquals(CONSTANTS.FUNCTIONAL, robT1000.equipment());
         Arrays.fill(this.heightMapBlockChange, Integer.MIN_VALUE); // clear heightmap
     }
 
